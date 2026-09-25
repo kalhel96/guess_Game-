@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Same Brain? A question game for two friends</title>
+  <meta name="description" content="A fun question game for two friends on one phone. Answer in secret, then see if you think alike." />
+  <meta name="theme-color" content="#3B1C63" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet" />
+  <style>
+/* ============ Colors & basics ============ */
+:root {
+  --grape: #3B1C63;    /* page background */
+  --grape-2: #4C2A7C;  /* small pills */
+  --ink: #1E0B38;      /* text, borders, shadows */
+  --paper: #FFF6E8;    /* cards */
+  --sun: #FFC93C;      /* Player 1 */
+  --berry: #FF5C8A;    /* Player 2 */
+  --mint: #3DDC97;     /* success / match */
+  --lilac: #CDBDF5;    /* soft text on grape */
+
+  --me: var(--sun);    /* whose turn it is (changed by JS) */
+  --radius-lg: 22px;
+  --radius: 14px;
+  --shadow: 5px 5px 0 var(--ink);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+
+body {
+  font-family: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  background: var(--grape);
+  color: var(--paper);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+  font-size: 1.0625rem;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 18px 48px;
+}
+
+.screen { display: flex; flex-direction: column; gap: 18px; }
+.screen[hidden] { display: none; }
+
+h1 {
+  font-size: clamp(3rem, 14vw, 4.8rem);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+h2 { font-size: 1.6rem; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+h3 { font-size: 1.1rem; margin: 22px 0 8px; }
+[tabindex="-1"]:focus { outline: none; }
+
+.lead { color: var(--lilac); margin: 0; max-width: 34ch; font-size: 1.15rem; }
+
+:focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+
+/* ============ Card ============ */
+.card {
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+/* ============ Logo: two friends' "brains" ============ */
+.logo { position: relative; width: 108px; height: 64px; }
+.blob {
+  position: absolute; top: 0;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+}
+.b1 { left: 0;  background: var(--sun);   animation: slideL 0.9s cubic-bezier(.3,1.5,.5,1) both; }
+.b2 { right: 0; background: var(--berry); animation: slideR 0.9s cubic-bezier(.3,1.5,.5,1) both; }
+@keyframes slideL { from { transform: translateX(-34px); } }
+@keyframes slideR { from { transform: translateX(34px); } }
+
+/* ============ Dots for players ============ */
+.dot {
+  display: inline-block; flex: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+}
+.p1 .dot { background: var(--sun); }
+.p2 .dot { background: var(--berry); }
+.dot.me { background: var(--me); }
+
+/* ============ Buttons ============ */
+.btn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 13px 20px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.btn:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:disabled, .btn.primary:disabled { background: var(--paper); opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--me); }
+.btn.go { background: var(--mint); }
+.btn.big { font-size: 1.2rem; padding: 16px 22px; width: 100%; }
+
+.link {
+  font: inherit; font-weight: 600;
+  background: none; border: 0; padding: 6px;
+  color: var(--lilac);
+  text-decoration: underline; text-underline-offset: 4px;
+  cursor: pointer; align-self: center;
+}
+
+.row { display: flex; flex-wrap: wrap; gap: 12px; }
+.row .btn { flex: 1 1 160px; }
+
+/* ============ Setup form ============ */
+.setup { display: flex; flex-direction: column; gap: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field .label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.field input {
+  font: inherit; font-weight: 500;
+  padding: 12px 14px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+}
+.field.p1 input:focus { box-shadow: 0 0 0 4px var(--sun); outline: none; }
+.field.p2 input:focus { box-shadow: 0 0 0 4px var(--berry); outline: none; }
+
+fieldset { border: 0; padding: 0; margin: 0; }
+legend { font-weight: 700; margin-bottom: 8px; padding: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip span {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.chip input:checked + span { background: var(--ink); color: var(--paper); }
+.chip input:focus-visible + span { outline: 3px solid var(--berry); outline-offset: 2px; }
+
+.error { margin: 0; color: #C2185B; font-weight: 700; min-height: 1.5em; }
+.error:empty { min-height: 0; display: none; }
+
+.howto { color: var(--paper); }
+.howto summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.howto ol { padding-left: 1.3em; margin: 8px 0 0; color: var(--lilac); }
+.howto li { margin-bottom: 6px; }
+.howto strong { color: var(--paper); }
+
+/* ============ Top scoreboard ============ */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: var(--ink);
+  font-weight: 700;
+}
+.topbar[hidden] { display: none; }
+.score { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.score.p2 { justify-content: flex-end; }
+.score .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9ch; }
+.score strong {
+  font-size: 1.25rem;
+  background: var(--paper); color: var(--ink);
+  border-radius: 8px; padding: 0 8px; min-width: 2.2ch; text-align: center;
+}
+.round { font-size: 0.75rem; color: var(--lilac); white-space: nowrap; }
+.mid { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
+.home {
+  font: inherit; font-size: 1.05rem; line-height: 1;
+  width: 34px; height: 34px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--lilac);
+  background: var(--grape-2);
+  cursor: pointer;
+}
+.home:active { transform: scale(0.92); }
+
+/* "Go home?" pop-up */
+.modal {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(30, 11, 56, 0.75);
+  display: grid; place-items: center;
+  padding: 18px;
+}
+.modal[hidden] { display: none; }
+.modal-card { width: 100%; max-width: 420px; animation: rise 0.25s ease-out; }
+.modal-card p { margin: 8px 0 18px; }
+@keyframes rise { from { transform: translateY(16px); opacity: 0; } }
+
+
+/* ============ Game screens ============ */
+.type-tag {
+  align-self: flex-start; margin: 0;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--grape-2);
+  border: 2px solid var(--lilac);
+  font-weight: 700;
+}
+
+.who { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-weight: 700; }
+
+/* Pass the phone: whole card turns the player's color */
+.pass { background: var(--me); text-align: center; padding: 40px 22px 28px; }
+.pass-emoji { font-size: 4rem; margin: 0; line-height: 1; }
+.pass h2 { font-size: 2rem; margin: 14px 0 6px; }
+.pass p { margin: 0 0 22px; font-weight: 600; }
+.pass .btn { background: var(--paper); }
+
+/* Answer options */
+.options { display: grid; gap: 10px; margin-top: 18px; }
+.opt {
+  font: inherit; font-weight: 600; font-size: 1.1rem;
+  text-align: left;
+  padding: 14px 16px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+.opt[aria-pressed="true"] { background: var(--me); box-shadow: 3px 3px 0 var(--ink); }
+.opt[aria-pressed="true"]::after { content: "✓"; font-weight: 800; }
+
+/* Reveal: the two answers "meet" in the middle when they match */
+.meet {
+  position: relative;
+  display: flex; justify-content: space-between; gap: 12px;
+  margin: 22px 0 26px;
+}
+.answer {
+  flex: 1;
+  min-height: 120px;
+  padding: 12px;
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  display: flex; flex-direction: column; justify-content: center;
+  text-align: center;
+  transition: transform 0.55s cubic-bezier(.3,1.5,.5,1);
+}
+.answer .nm { font-size: 0.85rem; font-weight: 700; opacity: 0.75; }
+.answer .val { font-size: 1.2rem; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.a1 { background: var(--sun); }
+.a2 { background: var(--berry); }
+
+.meet.match .a1 { transform: translateX(12px) rotate(-3deg); }
+.meet.match .a2 { transform: translateX(-12px) rotate(3deg); }
+.meet.miss .a1 { animation: wobbleL 0.5s; }
+.meet.miss .a2 { animation: wobbleR 0.5s; }
+
+.badge {
+  position: absolute; left: 50%; bottom: -18px; z-index: 2;
+  transform: translateX(-50%) scale(0);
+  background: var(--mint);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.meet.match .badge { animation: pop 0.5s 0.35s cubic-bezier(.3,1.7,.5,1) forwards; }
+
+@keyframes pop    { to { transform: translateX(-50%) scale(1) rotate(-4deg); } }
+@keyframes wobbleL { 30% { transform: translateX(-8px); } 60% { transform: translateX(4px); } }
+@keyframes wobbleR { 30% { transform: translateX(8px); }  60% { transform: translateX(-4px); } }
+
+.verdict { font-size: 1.25rem; font-weight: 800; margin: 16px 0 4px; }
+.nudge { margin: 0; }
+
+/* Dare card: big and bold in the player's color */
+.dare { background: var(--me); text-align: center; padding: 34px 22px; }
+.dare .who { justify-content: center; }
+.dare h2 { font-size: 1.9rem; }
+
+/* Talk timer */
+.talk h2 { margin-bottom: 14px; }
+.timer { position: relative; width: 120px; height: 120px; margin: 18px auto 4px; }
+.timer svg { transform: rotate(-90deg); display: block; }
+.ring-bg { fill: none; stroke: #EADFCB; stroke-width: 10; }
+.ring {
+  fill: none; stroke: var(--me); stroke-width: 10; stroke-linecap: round;
+  stroke-dasharray: 276.46; stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear;
+}
+.timer span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 2rem; font-weight: 800; }
+
+/* ============ End screen ============ */
+.final { display: flex; gap: 12px; }
+.final-p {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 14px 8px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  font-weight: 700;
+  min-width: 0;
+}
+.final-p.p1 { background: var(--sun); }
+.final-p.p2 { background: var(--berry); }
+.final-p .dot { display: none; }
+.final-p span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.final-p strong { font-size: 2.6rem; line-height: 1; }
+.winner { font-weight: 800; font-size: 1.2rem; text-align: center; margin: 14px 0 0; }
+
+.memories { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.memories li {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+}
+.memories li strong { display: block; color: #0F7A4F; }
+.memories li.empty { background: transparent; border-style: dashed; }
+
+.status { text-align: center; color: var(--mint); font-weight: 700; margin: 0; min-height: 1.5em; }
+
+/* ============ Sound + footer ============ */
+.sound {
+  display: block; margin: 0 auto 10px;
+  font: inherit; font-size: 0.9rem; font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--lilac);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+footer { text-align: center; color: var(--lilac); font-size: 0.9rem; padding: 0 16px 28px; }
+
+/* ============ Accessibility ============ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Phones with notches */
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+.topbar { top: env(safe-area-inset-top, 0px); }
+
+</style>
+</head>
+<body>
+
+  <!-- Scoreboard (only shows during the game) -->
+  <header class="topbar" id="topbar" hidden>
+    <div class="score p1"><span class="dot"></span><span class="nm" id="p1-name">P1</span><strong id="p1-score">0</strong></div>
+    <div class="mid">
+      <button id="home-btn" class="home" type="button" aria-label="Home">🏠</button>
+      <div class="round" id="round-label">Round 1 of 10</div>
+    </div>
+    <div class="score p2"><strong id="p2-score">0</strong><span class="nm" id="p2-name">P2</span><span class="dot"></span></div>
+  </header>
+
+  <main>
+
+    <!-- 1. START -->
+    <section id="screen-start" class="screen">
+      <div class="logo" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span></div>
+      <h1>Same Brain?</h1>
+      <p class="lead">A question game for two friends on one phone. Answer in secret, then find out if you think alike.</p>
+
+      <div id="setup" class="card setup">
+        <label class="field p1">
+          <span class="label"><span class="dot"></span>Player 1</span>
+          <input id="name1" maxlength="14" autocomplete="off" placeholder="Type a name" />
+        </label>
+        <label class="field p2">
+          <span class="label"><span class="dot"></span>Player 2</span>
+          <input id="name2" maxlength="14" autocomplete="off" placeholder="Type a name" />
+        </label>
+
+        <fieldset>
+          <legend>How long?</legend>
+          <div class="chips">
+            <label class="chip"><input type="radio" name="length" value="6" /><span>Quick (6)</span></label>
+            <label class="chip"><input type="radio" name="length" value="10" checked /><span>Normal (10)</span></label>
+            <label class="chip"><input type="radio" name="length" value="15" /><span>Long (15)</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>What kind of questions?</legend>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" name="pack" value="silly" checked /><span>🤪 Silly</span></label>
+            <label class="chip"><input type="checkbox" name="pack" value="food" checked /><span>🍕 Food</span></label>
+            <label class="chip"><input type="checkbox" name="pack" value="dreams" checked /><span>✈️ Dreams</span></label>
+            <label class="chip"><input type="checkbox" name="pack" value="deep" checked /><span>💭 Deep</span></label>
+          </div>
+        </fieldset>
+
+        <p class="error" id="setup-error" role="alert"></p>
+        <button id="start-btn" class="btn primary big" type="button">Start game</button>
+      </div>
+
+      <details class="howto">
+        <summary>How to play</summary>
+        <ol>
+          <li><strong>Same brain:</strong> you both answer in secret. Same answer? You both get a point.</li>
+          <li><strong>Guess me:</strong> one of you answers about yourself. The other guesses. Right guess = 1 point.</li>
+          <li><strong>Talk time:</strong> no points. Just talk about the question. Use the timer if you want.</li>
+          <li><strong>Dare:</strong> do a simple dare. Did it? +1 point. Too shy? Skip it.</li>
+          <li>Pass the phone when the game tells you. No peeking!</li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- 2. PASS THE PHONE -->
+    <section id="screen-pass" class="screen" hidden>
+      <div class="card pass">
+        <p class="pass-emoji" aria-hidden="true">🙈</p>
+        <h2>Pass the phone to <span id="pass-name">Player</span></h2>
+        <p id="pass-hint">No peeking!</p>
+        <button id="pass-ready" class="btn big" type="button">Show me</button>
+      </div>
+    </section>
+
+    <!-- 3. PICK AN ANSWER (secret) -->
+    <section id="screen-pick" class="screen" hidden>
+      <p class="type-tag" id="pick-type">🧠 Same brain</p>
+      <div class="card question">
+        <p class="who"><span class="dot me"></span><span id="pick-who">Your turn</span></p>
+        <h2 id="pick-question">Question</h2>
+        <div class="options" id="pick-options"></div>
+      </div>
+      <button id="pick-lock" class="btn primary big" type="button" disabled>Lock my answer</button>
+    </section>
+
+    <!-- 4. REVEAL -->
+    <section id="screen-reveal" class="screen" hidden>
+      <p class="type-tag" id="reveal-type">🧠 Same brain</p>
+      <div class="card question">
+        <h2 id="reveal-question">Question</h2>
+        <div class="meet" id="meet">
+          <div class="answer a1"><span class="nm"></span><span class="val"></span></div>
+          <span class="badge" id="meet-badge"></span>
+          <div class="answer a2"><span class="nm"></span><span class="val"></span></div>
+        </div>
+        <p class="verdict" id="verdict" aria-live="polite"></p>
+        <p class="nudge" id="nudge"></p>
+      </div>
+      <button id="reveal-next" class="btn go big" type="button">Next round</button>
+    </section>
+
+    <!-- 5. TALK TIME -->
+    <section id="screen-talk" class="screen" hidden>
+      <p class="type-tag">💬 Talk time</p>
+      <div class="card question talk">
+        <h2 id="talk-question">Question</h2>
+        <p class="who"><span class="dot me"></span><span id="talk-first">You go first</span></p>
+        <div class="timer" aria-live="off">
+          <svg viewBox="0 0 100 100" width="120" height="120" aria-hidden="true">
+            <circle class="ring-bg" cx="50" cy="50" r="44" />
+            <circle class="ring" id="ring" cx="50" cy="50" r="44" />
+          </svg>
+          <span id="talk-time">60</span>
+        </div>
+      </div>
+      <div class="row">
+        <button id="talk-start" class="btn" type="button">Start 60s timer</button>
+        <button id="talk-next" class="btn go" type="button">Next round</button>
+      </div>
+    </section>
+
+    <!-- 6. DARE -->
+    <section id="screen-dare" class="screen" hidden>
+      <p class="type-tag">🎲 Dare</p>
+      <div class="card dare">
+        <p class="who"><span id="dare-who">Your dare:</span></p>
+        <h2 id="dare-text">Dare</h2>
+      </div>
+      <div class="row">
+        <button id="dare-skip" class="btn" type="button">Skip it</button>
+        <button id="dare-done" class="btn go" type="button">Did it! +1</button>
+      </div>
+    </section>
+
+    <!-- 7. END -->
+    <section id="screen-end" class="screen" hidden>
+      <div class="logo" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span></div>
+      <h1 id="end-title">Best-friend energy</h1>
+      <p class="lead" id="end-sub"></p>
+
+      <div class="card results">
+        <div class="final">
+          <div class="final-p p1"><span class="dot"></span><span id="end-n1">P1</span><strong id="end-s1">0</strong></div>
+          <div class="final-p p2"><span class="dot"></span><span id="end-n2">P2</span><strong id="end-s2">0</strong></div>
+        </div>
+        <p class="winner" id="end-winner"></p>
+
+        <h3>Things you both picked</h3>
+        <ul class="memories" id="end-matches"></ul>
+
+        <h3>Things you talked about</h3>
+        <ul class="memories talked" id="end-talks"></ul>
+
+        <h3>Dares you did</h3>
+        <ul class="memories" id="end-dares"></ul>
+      </div>
+
+      <div class="row">
+        <button id="copy-btn" class="btn" type="button">Copy our results</button>
+        <button id="again-btn" class="btn go" type="button">Play again</button>
+      </div>
+      <button id="new-btn" class="link" type="button">🏠 Home: change names or settings</button>
+      <p class="status" id="copy-status" aria-live="polite"></p>
+    </section>
+
+  </main>
+
+  <!-- "Go home?" box -->
+  <div class="modal" id="leave-modal" hidden>
+    <div class="card modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-title">
+      <h2 id="leave-title">Go back home?</h2>
+      <p>This game will stop and the scores will reset.</p>
+      <div class="row">
+        <button id="leave-no" class="btn" type="button">Keep playing</button>
+        <button id="leave-yes" class="btn go" type="button">Yes, go home</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <button id="sound-toggle" class="sound" type="button" aria-pressed="true">🔊 Sound on</button>
+    Made for friends. Nothing is saved online.
+  </footer>
+
+  <script>
+/*
+  QUESTION BANK
+  -------------
+  Three kinds of questions:
+    same  -> both players answer in secret. Same answer = point for both.
+    guess -> one player answers about themself, the other guesses.
+             {name} is replaced with the player's name.
+    talk  -> no answers, no points. Just talk.
+
+  dare  -> a simple dare for one player. Doing it = +1 point.
+
+  dare  -> a simple dare for one player. Doing it = +1 point.
+
+  pack = which category it belongs to: "silly", "food", "dreams", "deep"
+         "bond" = friendship/relationship questions. They are ALWAYS mixed
+         in randomly and never shown as a separate category.
+
+  Tokens the game fills in for you:
+    {name}  -> the player the question is about (guess) or doing the dare
+    {other} -> the other player (dares)
+    {p1} / {p2} -> Player 1 and Player 2 names (great for "who is more likely")
+         "bond" = friendship/relationship questions. They are ALWAYS mixed
+         in randomly and never shown as a separate category.
+
+  Tokens the game fills in for you:
+    {name}  -> the player the question is about (guess) or doing the dare
+    {other} -> the other player (dares)
+    {p1} / {p2} -> Player 1 and Player 2 names (great for "who is more likely")
+
+  To add your own question, copy one line and change the words. That's it!
+*/
+
+const QUESTIONS = {
+  same: [
+    // Silly
+    { pack: "silly", q: "Would you rather have a pet dragon or a pet unicorn?", options: ["Dragon 🐉", "Unicorn 🦄"] },
+    { pack: "silly", q: "Would you rather talk to animals or speak every language?", options: ["Talk to animals", "Speak every language"] },
+    { pack: "silly", q: "Which is worse?", options: ["Stepping on a LEGO", "A wet sock", "Cold tea", "Slow Wi-Fi"] },
+    { pack: "silly", q: "Would you rather fly or be invisible?", options: ["Fly", "Be invisible"] },
+    { pack: "silly", q: "Pick a superpower for a lazy day:", options: ["Teleport", "Freeze time", "Clone myself", "Read minds"] },
+    { pack: "silly", q: "Which animal would be the rudest if it could talk?", options: ["Cat", "Goose", "Monkey", "Seagull"] },
+    { pack: "silly", q: "Would you rather live in a treehouse or a submarine?", options: ["Treehouse", "Submarine"] },
+    { pack: "silly", q: "Would you rather sneeze glitter or laugh like a goat?", options: ["Sneeze glitter", "Laugh like a goat"] },
+    { pack: "silly", q: "Zombies are coming. Best place to hide?", options: ["Mall", "School", "Farm", "Boat"] },
+
+    // Food
+    { pack: "food", q: "Only one forever: pizza or burgers?", options: ["Pizza 🍕", "Burgers 🍔"] },
+    { pack: "food", q: "Sweet breakfast or salty breakfast?", options: ["Sweet", "Salty"] },
+    { pack: "food", q: "Best late-night snack?", options: ["Chips", "Ice cream", "Leftovers", "Cereal"] },
+    { pack: "food", q: "Would you rather give up coffee or chocolate?", options: ["Give up coffee", "Give up chocolate"] },
+    { pack: "food", q: "Pineapple on pizza?", options: ["Yes, love it", "Never!"] },
+    { pack: "food", q: "Best way to eat eggs?", options: ["Fried", "Scrambled", "Boiled", "No eggs for me"] },
+    { pack: "food", q: "Fries should be...", options: ["Super crispy", "Soft and warm"] },
+    { pack: "food", q: "Pick a drink for the rest of your life:", options: ["Water", "Juice", "Soda", "Tea"] },
+
+    // Dreams
+    { pack: "dreams", q: "Dream trip: beach or mountains?", options: ["Beach 🏖️", "Mountains 🏔️"] },
+    { pack: "dreams", q: "Would you rather be famous, or rich but unknown?", options: ["Famous", "Rich but unknown"] },
+    { pack: "dreams", q: "Where would you live for one year?", options: ["Big city", "Small village", "On a boat", "In space"] },
+    { pack: "dreams", q: "Would you rather travel to the past or the future?", options: ["The past", "The future"] },
+    { pack: "dreams", q: "Dream job for one day:", options: ["Chef", "Astronaut", "Pop star", "Zookeeper"] },
+    { pack: "dreams", q: "A house by the sea or in the forest?", options: ["By the sea", "In the forest"] },
+    { pack: "dreams", q: "You win a free trip. Who comes?", options: ["Family", "Best friend", "Nobody, solo!", "My crush"] },
+
+    // Deep
+    { pack: "deep", q: "Better: many friends or a few close ones?", options: ["Many friends", "A few close ones"] },
+    { pack: "deep", q: "When you are sad, what do you want?", options: ["Talk it out", "Some space"] },
+    { pack: "deep", q: "Would you rather know the future or change the past?", options: ["Know the future", "Change the past"] },
+    { pack: "deep", q: "Morning person or night person?", options: ["Morning ☀️", "Night 🌙"] },
+    { pack: "deep", q: "What matters most in a friend?", options: ["Honesty", "Fun", "Loyalty", "Kindness"] },
+    { pack: "deep", q: "Would you rather be really smart or really happy?", options: ["Really smart", "Really happy"] },
+    { pack: "deep", q: "Big party or small dinner?", options: ["Big party", "Small dinner"] },
+
+    // Bond (friendship & relationship, mixed in randomly)
+    { pack: "bond", q: "Who is more likely to be late?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who texts first more often?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who is the better cook?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who would survive longer on an island?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who is more likely to cry at a movie?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who says sorry first after a fight?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who is the funnier one?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who would forget the other's birthday?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Who gives better advice?", options: ["{p1}", "{p2}"] },
+    { pack: "bond", q: "Best way to spend a day together?", options: ["Food trip", "Movie night", "Walk and talk", "Game day"] },
+    { pack: "bond", q: "What makes a friendship last?", options: ["Trust", "Laughing together", "Being there", "Honesty"] },
+    { pack: "bond", q: "How often should close friends talk?", options: ["Every day", "A few times a week", "Whenever", "Silence is fine"] },
+    { pack: "bond", q: "A friend who is always honest, or always kind?", options: ["Always honest", "Always kind"] },
+    { pack: "bond", q: "Best gift from someone you love?", options: ["A handwritten letter", "Surprise food", "Something expensive", "Their time"] },
+    { pack: "bond", q: "Long voice notes or quick texts?", options: ["Voice notes 🎙️", "Quick texts 💬"] },
+    { pack: "bond", q: "After a fight, what's best?", options: ["Talk right away", "Cool down first"] }
+  ],
+
+  guess: [
+    // Silly
+    { pack: "silly", q: "What would {name} do first in a zombie movie?", options: ["Run", "Fight", "Hide", "Make friends with the zombies"] },
+    { pack: "silly", q: "{name} gets $100 today. What happens to it?", options: ["Food", "Clothes", "Saves it", "Gone by tonight"] },
+    { pack: "silly", q: "There's a spider in the room. What does {name} do?", options: ["Scream", "Kill it", "Carry it outside", "Leave the room"] },
+    { pack: "silly", q: "Which emoji does {name} use most?", options: ["😂", "❤️", "💀", "👍"] },
+    { pack: "silly", q: "If {name} was an animal, which one?", options: ["Cat", "Dog", "Owl", "Sloth"] },
+    { pack: "silly", q: "{name} can only keep one app. Which one?", options: ["TikTok", "Instagram", "YouTube", "WhatsApp"] },
+
+    // Food
+    { pack: "food", q: "What does {name} order at a new restaurant?", options: ["The same safe thing", "The weirdest thing", "The cheapest thing", "Ask the waiter"] },
+    { pack: "food", q: "{name}'s favorite taste?", options: ["Spicy", "Sweet", "Salty", "Sour"] },
+    { pack: "food", q: "How does {name} feel about cooking?", options: ["Loves it", "Only if needed", "Burns everything", "Cooks for friends"] },
+    { pack: "food", q: "Last meal on Earth for {name}?", options: ["Pizza", "Mom's cooking", "Sushi", "Cake"] },
+
+    // Dreams
+    { pack: "dreams", q: "Where does {name} want to travel most?", options: ["Europe", "Asia", "Africa", "The Americas"] },
+    { pack: "dreams", q: "{name} gets one free year. What do they do?", options: ["Travel", "Start a business", "Sleep", "Learn something new"] },
+    { pack: "dreams", q: "In 10 years, {name} will be...", options: ["A boss", "Famous", "Traveling the world", "Chill with family"] },
+    { pack: "dreams", q: "{name}'s perfect weekend?", options: ["Party", "Nature", "Bed and movies", "Family time"] },
+
+    // Deep
+    { pack: "deep", q: "What makes {name} happy the fastest?", options: ["Music", "Food", "Friends", "Sleep"] },
+    { pack: "deep", q: "When {name} is angry, they...", options: ["Go quiet", "Talk loud", "Walk away", "Laugh it off"] },
+    { pack: "deep", q: "What is {name} most afraid of?", options: ["Being alone", "Failing", "Heights", "Bugs"] },
+    { pack: "deep", q: "How does {name} show love?", options: ["Gifts", "Time together", "Kind words", "Helping"] },
+    { pack: "deep", q: "First thing {name} does in the morning?", options: ["Check phone", "Pray or think", "Snooze", "Eat"] },
+
+    // Bond
+    { pack: "bond", q: "What does {name} like most about your friendship?", options: ["We laugh a lot", "We're honest", "We help each other", "We can be quiet together"] },
+    { pack: "bond", q: "{name} is having a bad day. What helps most?", options: ["A call", "Food", "A hug", "Some space"] },
+    { pack: "bond", q: "How does {name} say sorry?", options: ["Says it straight", "Buys food", "Acts normal", "Makes a joke"] },
+    { pack: "bond", q: "You forgot {name}'s birthday. What happens?", options: ["Gets mad", "Says it's fine", "Makes a joke", "Reminds you forever"] },
+    { pack: "bond", q: "What does {name} want more of from friends?", options: ["More time", "More honesty", "More fun plans", "More check-ins"] },
+    { pack: "bond", q: "Perfect day out with {name}?", options: ["Restaurant", "Beach or park", "Shopping", "Chilling at home"] },
+    { pack: "bond", q: "What does {name} do when they miss someone?", options: ["Text them", "Look at old photos", "Keep it inside", "Call right away"] },
+    { pack: "bond", q: "What would {name} never forgive?", options: ["Lying", "Sharing a secret", "Being ignored", "Eating their food"] }
+  ],
+
+  talk: [
+    // Silly
+    { pack: "silly", q: "What's the funniest thing that happened to you this year?" },
+    { pack: "silly", q: "If your life was a movie, what would the title be?" },
+    { pack: "silly", q: "What's a weird thing you believed as a kid?" },
+    { pack: "silly", q: "Describe your friend in 3 words. No thinking!" },
+
+    // Food
+    { pack: "food", q: "What food reminds you of home?" },
+    { pack: "food", q: "Invent a new dish right now. What's in it?" },
+    { pack: "food", q: "What's the worst meal you ever ate?" },
+
+    // Dreams
+    { pack: "dreams", q: "What's one thing you want to do before you turn 30?" },
+    { pack: "dreams", q: "If money didn't matter, what would you do every day?" },
+    { pack: "dreams", q: "Plan a trip together right now. Where do you go first?" },
+
+    // Deep
+    { pack: "deep", q: "What's a memory with your friend you'll never forget?" },
+    { pack: "deep", q: "What did you think of each other when you first met?" },
+    { pack: "deep", q: "What's something you're proud of but never say?" },
+    { pack: "deep", q: "What advice would you give your younger self?" },
+
+    // Bond
+    { pack: "bond", q: "What's one small thing your friend does that makes you feel cared for?" },
+    { pack: "bond", q: "What's your funniest memory together?" },
+    { pack: "bond", q: "What's one thing you want to do together this year?" },
+    { pack: "bond", q: "When did you know you could trust each other?" },
+    { pack: "bond", q: "What song reminds you of your friend? Why?" },
+    { pack: "bond", q: "What's one thing you want to thank your friend for right now?" },
+    { pack: "bond", q: "What makes a relationship strong, in your opinion?" },
+    { pack: "bond", q: "How has your friend changed since you met?" }
+  ],
+
+  dare: [
+    { q: "Do your best impression of {other}." },
+    { q: "Talk like a robot until your next turn." },
+    { q: "Sing any song chorus. Loud!" },
+    { q: "Give {other} a compliment that's not about looks." },
+    { q: "Be a news reporter. Describe this room for 30 seconds." },
+    { q: "Do 10 jumping jacks right now." },
+    { q: "Make up a secret handshake with {other}. You have 30 seconds." },
+    { q: "Dance with no music for 15 seconds." },
+    { q: "Say the alphabet backwards as far as you can." },
+    { q: "Tell {other} three things you like about them." },
+    { q: "Make {other} laugh in 20 seconds. No touching!" },
+    { q: "Only speak in questions until your next turn." },
+    { q: "Draw {other} in 30 seconds and show it." },
+    { q: "Hold a plank for 20 seconds." },
+    { q: "Show {other} the 5th photo in your gallery." },
+    { q: "Walk like a model across the room." },
+    { q: "Say something nice about yourself. Out loud!" },
+    { q: "Let {other} pick a funny nickname for you. Use it for the rest of the game." }
+  ]
+};
+
+</script>
+  <script>
+/*
+  SAME BRAIN? — game logic
+  ------------------------
+  Think of the game like a TV show with 6 "screens" (start, pass, pick,
+  reveal, talk, end). Only one screen is visible at a time. The `state`
+  object is the game's memory: names, scores, rounds, and answers.
+*/
+(() => {
+  "use strict";
+
+  // ---------- Helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const SCREENS = ["start", "pass", "pick", "reveal", "talk", "dare", "end"];
+  const COLORS = ["var(--sun)", "var(--berry)"];
+  const TAGS = { same: "🧠 Same brain", guess: "🔍 Guess me", talk: "💬 Talk time", dare: "🎲 Dare" };
+  const PATTERN = ["same", "guess", "dare", "same", "talk", "guess"]; // round order, repeats
+  const TALK_SECONDS = 60;
+  const RING = 276.46; // circle length for the timer ring (2 * π * 44)
+
+  const state = {
+    players: [{ name: "", score: 0 }, { name: "", score: 0 }],
+    settings: { length: 10, packs: ["silly", "food", "dreams", "deep"] },
+    rounds: [],
+    index: 0,
+    sync: 0,        // how many "Same brain" questions matched
+    sameTotal: 0,   // how many "Same brain" questions were played
+    matches: [],    // [{ q, a }] things you both picked
+    talks: [],      // talk questions you did
+    dares: [],      // dares that were done
+    soundOn: true,
+    timer: null,
+    left: TALK_SECONDS
+  };
+
+  const name = (i) => state.players[i].name;
+  // Replace {p1}/{p2} with player names, {name}/{other} with the given players
+  const fillAll = (text, me = 0) => text
+    .replace(/\{p1\}/g, name(0))
+    .replace(/\{p2\}/g, name(1))
+    .replace(/\{name\}/g, name(me))
+    .replace(/\{other\}/g, name(1 - me));
+  const isLastRound = () => state.index >= state.rounds.length - 1;
+
+  function shuffle(list) {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function show(screen) {
+    SCREENS.forEach((s) => { $("screen-" + s).hidden = s !== screen; });
+    $("topbar").hidden = screen === "start" || screen === "end";
+    window.scrollTo(0, 0);
+    // Move focus to the heading (helps keyboard + screen reader users)
+    const heading = $("screen-" + screen).querySelector("h1, h2");
+    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  }
+
+  // Whose color is "active" right now (buttons, pass card, selected answer)
+  function setTurnColor(i) {
+    document.documentElement.style.setProperty("--me", COLORS[i]);
+  }
+
+  // ---------- Tiny sound effects (no files needed) ----------
+  let audio;
+  const SOUND = { tap: [660], yes: [523, 659, 784, 1047], no: [392, 311], start: [440, 554, 659] };
+  function play(notes) {
+    if (!state.soundOn) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audio.currentTime;
+      notes.forEach((freq, i) => {
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        const t = t0 + i * 0.11;
+        osc.type = "triangle";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+        osc.connect(gain);
+        gain.connect(audio.destination);
+        osc.start(t);
+        osc.stop(t + 0.3);
+      });
+    } catch (e) { /* sound is optional */ }
+  }
+
+  // ---------- Build the list of rounds ----------
+  function buildRounds() {
+    const { length, packs } = state.settings;
+    const refill = (type) => {
+      // "bond" questions (and dares) are always mixed in, no matter what was picked
+      let pool = QUESTIONS[type].filter((q) => !q.pack || q.pack === "bond" || packs.includes(q.pack));
+      if (pool.length < 3) pool = QUESTIONS[type]; // not enough? use all
+      return shuffle(pool);
+    };
+    const pools = { same: refill("same"), guess: refill("guess"), talk: refill("talk"), dare: refill("dare") };
+
+    let guessTurn = Math.random() < 0.5 ? 0 : 1; // who answers in "Guess me"
+    const rounds = [];
+    for (let i = 0; i < length; i++) {
+      const type = PATTERN[i % PATTERN.length];
+      if (!pools[type].length) pools[type] = refill(type);
+      const round = { type, q: pools[type].pop(), first: i % 2 };
+      if (type === "guess") { round.answerer = guessTurn; guessTurn = 1 - guessTurn; }
+      rounds.push(round);
+    }
+    return rounds;
+  }
+
+  // ---------- Game flow ----------
+  function newGame() {
+    state.players.forEach((p) => { p.score = 0; });
+    Object.assign(state, { rounds: buildRounds(), index: 0, sync: 0, sameTotal: 0, matches: [], talks: [], dares: [] });
+    $("p1-name").textContent = name(0);
+    $("p2-name").textContent = name(1);
+    updateScores();
+    play(SOUND.start);
+    playRound();
+  }
+
+  function updateScores() {
+    $("p1-score").textContent = state.players[0].score;
+    $("p2-score").textContent = state.players[1].score;
+  }
+
+  function playRound() {
+    const r = state.rounds[state.index];
+    $("round-label").textContent = `${state.index + 1} / ${state.rounds.length}`;
+    $("round-label").setAttribute("aria-label", `Round ${state.index + 1} of ${state.rounds.length}`);
+
+    if (r.type === "talk") { showTalk(r); return; }
+    if (r.type === "dare") { showDare(r); return; }
+
+    if (r.type === "same") {
+      const a = r.first, b = 1 - a;
+      const question = fillAll(r.q.q);
+      const options = r.q.options.map((o) => fillAll(o));
+      const card = (i) => ({ tag: TAGS.same, who: `${name(i)}, what's your answer?`, question, options });
+      askSecret(a, card(a), (ansA) =>
+        askSecret(b, card(b), (ansB) => {
+          const answers = [];
+          answers[a] = ansA;
+          answers[b] = ansB;
+          revealSame(question, answers);
+        })
+      );
+      return;
+    }
+
+    // Guess me
+    const a = r.answerer, g = 1 - a;
+    const question = fillAll(r.q.q, a);
+    askSecret(a, { tag: TAGS.guess, who: `${name(a)}, answer about yourself`, question, options: r.q.options }, (answer) =>
+      askSecret(g, { tag: TAGS.guess, who: `${name(g)}, what did ${name(a)} pick?`, question, options: r.q.options }, (guess) =>
+        revealGuess(question, a, answer, guess)
+      )
+    );
+  }
+
+  // Step 1: "pass the phone" cover screen. Step 2: secret answer.
+  function askSecret(i, card, done) {
+    setTurnColor(i);
+    $("pass-name").textContent = name(i);
+    $("pass-hint").textContent = `${name(1 - i)}, look away. No peeking!`;
+    const btn = $("pass-ready");
+    btn.textContent = `I'm ${name(i)}, show me`;
+    btn.onclick = () => { play(SOUND.tap); showPick(card, done); };
+    show("pass");
+  }
+
+  function showPick(card, done) {
+    $("pick-type").textContent = card.tag;
+    $("pick-who").textContent = card.who;
+    $("pick-question").textContent = card.question;
+
+    const box = $("pick-options");
+    const lock = $("pick-lock");
+    box.innerHTML = "";
+    lock.disabled = true;
+    let chosen = null;
+
+    card.options.forEach((opt) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "opt";
+      b.textContent = opt;
+      b.setAttribute("aria-pressed", "false");
+      b.onclick = () => {
+        chosen = opt;
+        box.querySelectorAll(".opt").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        lock.disabled = false;
+      };
+      box.appendChild(b);
+    });
+
+    lock.onclick = () => {
+      if (chosen === null) return;
+      play(SOUND.tap);
+      done(chosen);
+    };
+    show("pick");
+  }
+
+  // Put answers in the two bubbles and run the "meet" animation
+  function setMeet(labels, values, good, badgeText) {
+    const meet = $("meet");
+    meet.querySelector(".a1 .nm").textContent = labels[0];
+    meet.querySelector(".a1 .val").textContent = values[0];
+    meet.querySelector(".a2 .nm").textContent = labels[1];
+    meet.querySelector(".a2 .val").textContent = values[1];
+    $("meet-badge").textContent = badgeText;
+    meet.classList.remove("match", "miss");
+    void meet.offsetWidth; // restart the animation
+    meet.classList.add(good ? "match" : "miss");
+  }
+
+  function revealSame(question, answers) {
+    const match = answers[0] === answers[1];
+    state.sameTotal++;
+    if (match) {
+      state.sync++;
+      state.players.forEach((p) => { p.score++; });
+      state.matches.push({ q: question, a: answers[0] });
+    }
+    $("reveal-type").textContent = TAGS.same;
+    $("reveal-question").textContent = question;
+    setMeet([name(0), name(1)], answers, match, "Same brain! 🎉");
+    $("verdict").textContent = match ? "You matched! +1 point each." : "Different brains this time.";
+    $("nudge").textContent = match
+      ? "Now both say why, at the same time. 1, 2, 3!"
+      : "Each of you: say why you picked yours, in one sentence.";
+    finishReveal(match);
+  }
+
+  function revealGuess(question, a, answer, guess) {
+    const g = 1 - a;
+    const correct = answer === guess;
+    if (correct) state.players[g].score++;
+
+    const labels = [], values = [];
+    labels[a] = `${name(a)} picked`;  values[a] = answer;
+    labels[g] = `${name(g)} guessed`; values[g] = guess;
+
+    $("reveal-type").textContent = TAGS.guess;
+    $("reveal-question").textContent = question;
+    setMeet(labels, values, correct, "Got it! 🎯");
+    $("verdict").textContent = correct
+      ? `${name(g)} really knows ${name(a)}! +1 for ${name(g)}.`
+      : `Not this time, ${name(g)}.`;
+    $("nudge").textContent = correct
+      ? `${name(a)}, tell a quick story about why this is so you.`
+      : `${name(a)}, tell ${name(g)} why you picked "${answer}".`;
+    finishReveal(correct);
+  }
+
+  function finishReveal(good) {
+    updateScores();
+    play(good ? SOUND.yes : SOUND.no);
+    $("reveal-next").textContent = isLastRound() ? "See our results" : "Next round";
+    show("reveal");
+  }
+
+  function nextRound() {
+    stopTimer();
+    state.index++;
+    if (state.index >= state.rounds.length) showEnd();
+    else playRound();
+  }
+
+  // ---------- Talk time ----------
+  function showTalk(r) {
+    setTurnColor(r.first);
+    $("talk-question").textContent = r.q.q;
+    $("talk-first").textContent = `${name(r.first)} answers first, then ${name(1 - r.first)}.`;
+    state.talks.push(r.q.q);
+    resetTimer();
+    $("talk-next").textContent = isLastRound() ? "See our results" : "Next round";
+    show("talk");
+  }
+
+  function drawTimer() {
+    $("talk-time").textContent = state.left;
+    $("ring").style.strokeDashoffset = RING * (1 - state.left / TALK_SECONDS);
+  }
+  function stopTimer() { clearInterval(state.timer); state.timer = null; }
+  function resetTimer() {
+    stopTimer();
+    state.left = TALK_SECONDS;
+    drawTimer();
+    $("talk-start").textContent = "Start 60s timer";
+  }
+  function toggleTimer() {
+    const btn = $("talk-start");
+    if (state.timer) { stopTimer(); btn.textContent = "Resume timer"; return; }
+    if (state.left <= 0) { state.left = TALK_SECONDS; drawTimer(); }
+    btn.textContent = "Pause timer";
+    state.timer = setInterval(() => {
+      state.left--;
+      drawTimer();
+      if (state.left <= 0) {
+        stopTimer();
+        btn.textContent = "Restart timer";
+        play(SOUND.yes);
+      }
+    }, 1000);
+  }
+
+  // ---------- Dare ----------
+  function showDare(r) {
+    const d = r.first; // who does the dare
+    setTurnColor(d);
+    const text = fillAll(r.q.q, d);
+    $("dare-who").textContent = `${name(d)}, your dare:`;
+    $("dare-text").textContent = text;
+    $("dare-done").textContent = `${name(d)} did it! +1`;
+    $("dare-done").onclick = () => {
+      state.players[d].score++;
+      state.dares.push(`${name(d)}: ${text}`);
+      updateScores();
+      play(SOUND.yes);
+      nextRound();
+    };
+    $("dare-skip").onclick = () => { play(SOUND.no); nextRound(); };
+    show("dare");
+  }
+
+  // ---------- End screen ----------
+  function titleFor(pct) {
+    if (pct >= 0.8) return "Two bodies, one brain";
+    if (pct >= 0.6) return "Best-friend energy";
+    if (pct >= 0.4) return "Opposites with style";
+    return "Beautifully different";
+  }
+
+  function fillList(id, items, emptyText, render) {
+    const ul = $(id);
+    ul.innerHTML = "";
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = emptyText;
+      ul.appendChild(li);
+      return;
+    }
+    items.forEach((item) => ul.appendChild(render(item)));
+  }
+
+  function showEnd() {
+    setTurnColor(0);
+    const [p0, p1] = state.players;
+    const pct = state.sameTotal ? state.sync / state.sameTotal : 0;
+
+    $("end-title").textContent = titleFor(pct);
+    $("end-sub").textContent = `You matched on ${state.sync} of ${state.sameTotal} "Same brain" questions.`;
+    $("end-n1").textContent = p0.name;
+    $("end-s1").textContent = p0.score;
+    $("end-n2").textContent = p1.name;
+    $("end-s2").textContent = p1.score;
+    $("end-winner").textContent = p0.score === p1.score
+      ? "It's a tie. Perfect friendship math. 🤝"
+      : `${p0.score > p1.score ? p0.name : p1.name} wins this time! 🏆`;
+
+    fillList("end-matches", state.matches, "No matches this time. Play again and try to sync!", (m) => {
+      const li = document.createElement("li");
+      const strong = document.createElement("strong");
+      strong.textContent = m.a;
+      li.append(strong, m.q);
+      return li;
+    });
+    fillList("end-talks", state.talks, "No talk rounds this game.", (t) => {
+      const li = document.createElement("li");
+      li.textContent = t;
+      return li;
+    });
+    fillList("end-dares", state.dares, "No dares done. Brave next time? 😄", (t) => {
+      const li = document.createElement("li");
+      li.textContent = t;
+      return li;
+    });
+
+    $("copy-status").textContent = "";
+    play(SOUND.yes);
+    show("end");
+  }
+
+  function resultsText() {
+    const [p0, p1] = state.players;
+    const lines = [
+      `🧠 Same Brain? — ${p0.name} & ${p1.name}`,
+      `${titleFor(state.sameTotal ? state.sync / state.sameTotal : 0)}`,
+      `Score: ${p0.name} ${p0.score} – ${p1.score} ${p1.name}`,
+      `We matched ${state.sync} of ${state.sameTotal} times.`
+    ];
+    if (state.matches.length) {
+      lines.push("", "We both picked:");
+      state.matches.forEach((m) => lines.push(`• ${m.a} (${m.q})`));
+    }
+    if (state.dares.length) {
+      lines.push("", "Dares we did:");
+      state.dares.forEach((d) => lines.push(`• ${d}`));
+    }
+    lines.push("", "Play with a friend: " + location.href.split("#")[0]);
+    return lines.join("\n");
+  }
+
+  async function copyResults() {
+    const text = resultsText();
+    const status = $("copy-status");
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = "Copied! Paste it in your chat. 📋";
+    } catch (e) {
+      // Fallback for older browsers
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand && document.execCommand("copy");
+      ta.remove();
+      status.textContent = ok ? "Copied! Paste it in your chat. 📋" : "Copy didn't work here. Take a screenshot instead!";
+    }
+  }
+
+  // ---------- Home button ----------
+  function askGoHome() {
+    $("leave-modal").hidden = false;
+    $("leave-no").focus();
+  }
+  function closeModal() {
+    $("leave-modal").hidden = true;
+  }
+  function goHome() {
+    closeModal();
+    stopTimer();
+    setTurnColor(0);
+    show("start"); // names stay filled in, ready to edit
+  }
+
+  // ---------- Setup form ----------
+  function startFromForm(e) {
+    if (e) e.preventDefault();
+    const n1 = $("name1").value.trim() || "Player 1";
+    const n2 = $("name2").value.trim() || "Player 2";
+    const packs = [...document.querySelectorAll('input[name="pack"]:checked')].map((x) => x.value);
+    const length = Number(document.querySelector('input[name="length"]:checked').value);
+    const err = $("setup-error");
+
+    if (n1.toLowerCase() === n2.toLowerCase()) { err.textContent = "Use two different names so the game can tell you apart."; return; }
+    if (!packs.length) { err.textContent = "Pick at least one kind of question."; return; }
+    err.textContent = "";
+
+    state.players[0].name = n1;
+    state.players[1].name = n2;
+    state.settings = { length, packs };
+    try { localStorage.setItem("samebrain-names", JSON.stringify([n1, n2])); } catch (e) { /* optional */ }
+    newGame();
+  }
+
+  function toggleSound() {
+    state.soundOn = !state.soundOn;
+    const btn = $("sound-toggle");
+    btn.setAttribute("aria-pressed", String(state.soundOn));
+    btn.textContent = state.soundOn ? "🔊 Sound on" : "🔇 Sound off";
+  }
+
+  // ---------- Start everything ----------
+  function init() {
+    // Remember last names on this device
+    try {
+      const saved = JSON.parse(localStorage.getItem("samebrain-names") || "null");
+      if (Array.isArray(saved)) { $("name1").value = saved[0] || ""; $("name2").value = saved[1] || ""; }
+    } catch (e) { /* ignore */ }
+
+    $("start-btn").addEventListener("click", startFromForm);
+    ["name1", "name2"].forEach((id) => $(id).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") startFromForm(e);
+    }));
+    $("reveal-next").addEventListener("click", nextRound);
+    $("talk-next").addEventListener("click", nextRound);
+    $("talk-start").addEventListener("click", toggleTimer);
+    $("copy-btn").addEventListener("click", copyResults);
+    $("again-btn").addEventListener("click", newGame);
+    $("new-btn").addEventListener("click", goHome);
+    $("home-btn").addEventListener("click", askGoHome);
+    $("leave-yes").addEventListener("click", goHome);
+    $("leave-no").addEventListener("click", closeModal);
+    $("leave-modal").addEventListener("click", (e) => { if (e.target.id === "leave-modal") closeModal(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+    $("sound-toggle").addEventListener("click", toggleSound);
+  }
+
+  init();
+})();
+
+</script>
+</body>
+</html>
